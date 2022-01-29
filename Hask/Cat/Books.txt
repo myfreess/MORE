@@ -1,0 +1,32 @@
+Category Theory for Computing Science
+
+http://www.tac.mta.ca/tac/reprints/articles/22/tr22.pdf
+
+Basic Category Theory for Computer Scientists
+
+https://mitpress.mit.edu/books/basic-category-theory-computer-scientists
+
+Abstract and Concrete Categories - The Joy of Cats
+
+http://katmat.math.uni-bremen.de/acc/acc.pdf
+
+Seven Sketches in Compositionality: An Invitation to Applied Category Theory
+
+https://arxiv.org/abs/1803.05316
+
+Category Theory for Programmers
+
+https://bartoszmilewski.com/2014/10/28/category-theory-for-programmers-the-preface/
+
+Introduction to Category Theory
+
+http://www.cs.nott.ac.uk/~pszgmh/cat.html
+
+Conceptual mathematics - a first introduction to categories
+
+https://www.semanticscholar.org/paper/Conceptual-mathematics-a-first-introduction-to-Lawvere-Schanuel/420978d31ad09e7236dfa10d46075a76f52f07f6
+
+Category Theory Illustrated
+
+https://boris-marinov.github.io/category-theory-illustrated/00_about/
+

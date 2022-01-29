@@ -1,0 +1,28 @@
+https://ncatlab.org/nlab/show/2-category
+
+http://www.maths.mq.edu.au/~street/Encyclopedia.pdf
+
+strict
+
+一个2-范畴C就是一个被笛卡尔幺半范畴Cat富化的范畴啦(最简单的定义)。首先有一组对象，然后每一对对象(x, y)在Cat里都有一个hom范畴homC(x, y)对应,这些hom范畴中的对象就是原2-范畴C中的1-态射，而态射为原2-范畴C中的2-态射。
+
+接下来还需要一些函子
+
+1_a : 1 -> homC(a, a)
+
+comp : homC(b, c) × homC(a, b) -> homC(a, c)
+
+1是Cat范畴中的初始对象，占位用。comp函子作为运算符符合恒等律和结合律，这就构成一个很像幺半群的结构，不然怎么说Cat是笛卡尔幺半范畴呢。
+
+注：此处初始对象用1的原因大概是因为这是一个类似幺半群的结构，而一般来说幺半群的二元运算都被定义为“乘法”, 反正nlab这么写了。
+
+https://ncatlab.org/nlab/show/enriched+category
+
+
+General
+
+对富化版本的定义放宽限制就得到bicategory,恒等律和结合律被放宽了，只需要满足coherent isomorphism即可。
+
+吐了，看不下去了。
+
+

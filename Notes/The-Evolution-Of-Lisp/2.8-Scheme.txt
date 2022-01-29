@@ -1,0 +1,12 @@
+在1975年秋天时，Sussman和Steele决定做一个MacLisp上的Lisp方言，用于学习Carl Hewitt的Actor模型，因为他们在尝试理解一些paper里的结论时头大了。Sussman学过Algol，所以他提议搞个词法作用域的Lisp方言，亦可赛艇!
+Actor使用alpha表示，就像这样, 它没有返回值，只能把计算结果作为message传递给其他actor。以message方式传入的actor被称为continuation。
+
+(define factorial
+    (lambda (n)
+        (if (= n 0) 1 (* n (factorial (- n 1))))))
+
+(define actorial
+    (alpha (n c)
+        (if (= n 0) (c 1) (actorial (- n 1) (alpha (f) (c (* f n)))))))
+
+然后在他们检查apply的实现时意外发现其实actor和closure没俩样。

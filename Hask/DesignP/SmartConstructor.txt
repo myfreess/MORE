@@ -1,0 +1,117 @@
+SmartConstructor
+
+上回(NewType)说到用haskell编写一个扫雷，并且使用Position类型表达每个格子在雷场中的位置。
+
+好像忘了什么? 对了，应该用9×9的雷场。也就是说Position (i, j)应该满足 0 <= i < 9, 0 <= j < 9)
+
+你看到了，haskell的常规类型检查对于这种种「细分」的新类型束手无策(但是，你听说过Dependent Type吗？)，所以我们需要一些额外的设计，SmartConstructor正是这样的一种模式。
+
+其实非常简单，用一个新的函数充当类型构造子，并且加上范围检查就是了。
+
+mkPos :: Int -> Int -> Position
+mkPos x y | x < 9 && x >= 0 && y < 9 && y >= 0 = Position (x, y)
+          | otherwise = error "MineSweeper.Position.mkPos : 不合法的参数范围"
+-- 错误报告简化了
+
+你可能会问如何避免有人绕过mkPos直接使用Position，答案是定义module时将Position作为内部函数隐藏起来,只对外部提供mkPos。如果你不喜欢Error，也可以用Maybe等Monad表达错误。
+
+注 : 隐藏Position这种直接值构造子的目的还有一个，防止对Data.Coerce的误用。
+
+但是隐藏了值构造子，也就不能用Pattern Matching了,如果使用的话，编译时GHC会给出这样的错误：
+
+error: Not in scope: data constructor ‘Position
+
+所以还得弄点方便访问的辅助函数。总结全代码如下
+
+module MineSweeper.Position (mkPos, fstP, sndP, unPos) where
+
+newtype Position = Position (Int,Int)
+mkPos :: Int -> Int -> Position
+mkPos x y | x < 9 && x >= 0 && y < 9 && y >= 0 = Position (x, y)
+          | otherwise = error "MineSweeper.Position.mkPos : 不合法的参数范围"
+
+unPos :: Position -> (Int, Int)
+unPos (Position i) = i
+
+fstP, sndP :: Position -> Int
+fstP = fst . unPos
+sndP = snd . unPos
+
+很简明，unPos提取整个二元组，fstP，sndP的作用更加明了：无非是fst和snd的特化版本。
+
+
+这好像已经是一个很健壮，很Robust的设计了，但是我们还有几个地方可供讨论。
+
+1.有无办法把参数性质检查放到编译期？
+
+仔细想想，如果参数都是常量，那么在编译期提前执行自定义的构造子，既可以加速程序运行速度，又可以把一些运行时错误提早到编译期，这是符合haskell理念的(不过如果使用Monadic的错误处理，显然只能减少一些运算)
+
+额，haskell当然是提供了编译期运算的语言设施的 --- 但是是GHC扩展。
+
+Template Haskell
+
+好的，现在来重写一下Position模块。
+
+
+{-# LANGUAGE DeriveLift #-}
+
+module MineSweeper.Position (mkPos, fstP, sndP, unPos) where
+
+import Language.Haskell.TH.Syntax
+
+newtype Position = Position (Int,Int) deriving Lift
+
+mkPos :: Int -> Int -> Position
+mkPos x y | x < 9 && x >= 0 && y < 9 && y >= 0 = Position (x, y)
+          | otherwise = error "MineSweeper.Position.mkPos : 不合法的参数范围"
+
+unPos :: Position -> (Int, Int)
+unPos (Position i) = i
+
+fstP, sndP :: Position -> Int
+fstP = fst . unPos
+sndP = snd . unPos
+
+我们做了啥? 好像关键的函数什么也没有变啊!  实际上就是没变，这里只是引入Lift class和为Position类型实现了Lift的实例而已。(import的库包含了Lift, 最顶端的{-# LANGUAGE DeriveLift #-}开启一个扩展，使得GHC可以自动为Position类型生成Lift的实例)
+
+之后呢？
+
+此处提供test.hs如下
+
+{-# LANGUAGE TemplateHaskell #-}
+
+import MineSweeper.Position
+import Language.Haskell.TH.Syntax
+
+
+main = print $(lift (mkPos 9 9))
+
+现在该说一些更细节的东西了，TemplateHaskell是一个为haskell实现模板元编程的扩展，但是实际上还包括了template-haskell库。它主要的作用就是在编译期执行运算生成AST。
+
+$(lift Expr) 会把Expr当成一个haskell表达式求值，如果它确实可以在编译期计算，就把结果转换成对应的AST并替换到$(lift ..)所在的位置。
+
+太长不看版 ：想在编译期就搞定某些计算就用$(lift ), 同时括号内的函数必须来自其他分隔开的Module。
+
+对了，直接编译test.hs,GHC会提醒你：
+
+ghc: this operation requires -fexternal-interpreter
+
+编译期运算是通过外部解释器实现的，加上-fexternal-interpreter才能真正完成编译!
+
+更多细节：https://well-typed.com/blog/2020/06/th-for-static-data/
+
+更更多的细节：https://hackage.haskell.org/package/template-haskell-2.16.0.0/docs/Language-Haskell-TH-Syntax.html
+
+不要一头热的觉得你找到了某种银弹，看看这里，谨慎使用TemplateHaskell：https://stackoverflow.com/questions/10857030/whats-so-bad-about-template-haskell
+
+其实实现编译期运算也不止TH一种方式：https://dev.to/serokell/compile-time-evaluation-in-haskell-58j4
+
+建议看着乐，别太当真了。
+
+2.GHC有个扩展叫PatternSynonyms, 如果把原本的构造子隐藏起来，那很抱歉这个看起来就用不了了。(我没看具体的实现原理，只是做了个测试，有谁来个全面挖掘吗？)
+
+(看看这里了解一下基本上它用来做什么：https://kseo.github.io/posts/2016-12-22-pattern-synonyms.html
+
+3. Monadic的错误处理考虑一下Either String和Validation。
+
+
