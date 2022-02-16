@@ -35,7 +35,7 @@ liftBase方法的意图非常简单，得到一个基底(base, 对应类型变�
 
 + 还有个值`bar :: m a`
 
-要怎样把bar喂给foo呢？
+要怎样把bar喂给foo呢？也就是说，怎么把一个操作提升到更厚的MonadT上下文上？
 
 偷看一眼`MonadBase`的实例，会发现基本只有俩种情况，要么b和m就一样，要么m是b加上某个MonadTransformer，凝噎了。
 
@@ -51,9 +51,9 @@ bar :: StateT X IO Y
 
 MonadTrans这东西......好增不好减，那也是为什么会有人(fpcomplete是首创吗？)搞出糙平快的ReaderT pattern，lift和boilerplate写多了确实比较麻。仅以此例，我们要做的是一些很乏味的重复性工作：
 
-+ 首先提取出StateT的状态
++ 首先提取出StateT的输入状态
 
-+ 然后用runStateT去执行bar，拿到一个类型为`IO (Y, X)`的值，再把它传递给foo，foo的返回值还得加个lift到`StateT X IO (Y, Xs)`
++ 然后用runStateT和前文得到的输入状态去执行bar，拿到一个类型为`IO (Y, X)`的值，再把它传递给foo，foo的返回值还得加个lift到`StateT X IO (Y, Xs)`
 
 + 想个法子把`StateT X IO (Y, X)`弄成`StateT X IO Y`, 不过我们知道该干什么，用新状态换掉旧状态，然后简简单单pure个值就好。
 
@@ -72,7 +72,7 @@ foo' m = do
   pure v
 ```
 
-从这个例子也能看出为什么需要foo对它的参数多态了，想必正常的处理IO的函数不会考虑到得到的值是买一送一，还附带一个状态这种事。且单态会让foo具有在状态上做些具体操作的能力，实际上它不应该对状态多管闲事的，对吧。
+从这个例子也能看出为什么需要foo对它的参数多态了，想必正常的处理IO的函数不会考虑到得到的值是买一送一，还附带一个状态这种事。且单态会让foo具有在状态上做些具体操作的能力，实际上它不应该对状态多管闲事的，对吧，拿IO的剑斩StateT的官是不对的。
 
 `MonadBaseControl`的想法是把以上boilerplate分成俩个函数：`liftBaseWith`和 `restoreM` 
 
@@ -225,3 +225,128 @@ newtype RunInBase b m = RunInBase (forall a. m a -> b (StM m a))
 
 > 2022.2.15, 版本 1.0.3.1, 没有。
 
+## 陷阱
+
+前面已经知道单态函数是不能用这个去做提升的，但是也不是只有完全的多态函数才行，对参数多态就可以了，比如这样
+
+```haskell
+sideEffect :: IO a -> IO ()
+```
+
+这样的函数在lift之后完全能通过编译，但是它会丢弃所有的monadic state。在有些Monad Transformer那里它是安全的，例如ReaderT(它的monadic state是(), 就凑个数), 但是这不是普适的......在type class约束那里加个`StM m a ~ a`可以让这一切变得可控`[1]`.
+
+`[1]`：`~`这个typeclass(?)来自`ConstraintKind`扩展，大意是保证所关联的两个类型相等，详情请查阅GHC文档，关于此扩展更加高观点的介绍可看Edward Kmett的演讲**typeclass vs the world**
+
+上述准则仅供了解，并非什么需要死记硬背的条文，此处借来一个提升IO回调API的例子：
+
+```haskell
+withFile 
+    :: FilePath 
+    -> IOMode 
+    -> (Handle -> IO a) -- callback to lift
+    -> IO a
+
+withFileLifted
+    :: (MonadBaseControl IO m, StM m a ~ a)
+    => FilePath
+    -> IOMode
+    -> (Handle -> m a)
+    -> m a
+withFileLifted path mode action =
+    control $ \runInIO ->
+        withFile path mode (runInIO . action)
+
+-- 基本是只适合ReaderT r IO 了
+-- 此处禁掉ExceptT, StateT啥的
+-- 是因为它们在多线程下行为没法预测
+```
+
+control是monad-control库中的一个辅助函数
+
+```haskell
+control :: MonadBaseControl b m => (RunInBase m b -> b (StM m a)) -> m a
+```
+
+它只是一个常用的组合拳: `control f = liftBaseWith f >>= restoreM`
+
+我们看到了一个非常实在的关于IO的例子，关于IO其实还有不少让人头大的问题，比如异常。它引入的问题被称为所谓的可回退状态(Rewindable state), 或者事务性状态(transactional state).
+
+从最常见的catch操作即可一窥其麻烦
+
+```haskell
+catch :: Exception e => IO a -> (e -> IO a) -> IO a
+```
+
+当我们去提升catch函数时，似乎只有一种方法，那就是同时对IO Action和handler用runInBase封装。异常总是不期而至嘛，怎么敢假定它不会到场。被称为可回退状态的原因显而易见，一但异常触发，catch就会将控制流倒带并转交给handler，而原本的monadic state也在倒带过程中被丢弃了，最后得到哪个状态只能看运气了。
+
+```haskell
+catch' :: (Exception e, MonadBaseControl IO m) => m a -> (e -> m a) -> m a
+catch' m f = do
+  s <- liftBaseWith $ \runInBase ->
+    catch (runInBase m) (runInBase . f)
+  restoreM s
+```
+
+这样的实现不可谓没有道理，而且也有用。但是现在请联想一下haskell中一类声名不显于外的语言构造: **可变引用**
+
+`catch'`的行为显然在IORef或者MVar之类的可变引用上要出大问题，因为可变引用上的写入副作用并不会随着异常的触发一同回滚，那么最终结果恐怕只好碰运气了。笔者认为MonadBaseControl分享同一状态的API设计就和可变引用多少带点冲突，如果真的有需要将它们混在一个锅里，那就想办法确保runInBase只被使用一次。
+
+> 笔者将在类型层面解决此类问题的希望寄托于使用Graded Modal Type和Linear Type的Granule语言。它是haskell的一个方言，还很稚嫩，不知前路如何。
+
+如果说catch有点像电影"老无所依"里面的那个变态杀手，扔硬币决定要不要结果某人，那finally就是严格尊照计划的屠夫，它犯下制度化的恶行：永远丢弃第二个参数的状态。
+
+```haskell
+finally' :: MonadBaseControl IO m => m a -> m b -> m a
+finally' ma mb = do
+  s <- liftBaseWith $ \runInBase ->
+    finally (runInBase ma) (runInBase mb)
+  restoreM s
+```
+
+不过呢，其实也不是没法处理成一气连枝的，只是很麻烦，要明确顺序，要手动处理异常，很难评价
+
+```haskell
+finally' :: MonadBaseControl IO m => m a -> m b -> m a
+finally' ma mb = mask' $ \restore -> do
+  a <- liftBaseWith $ \runInBase ->
+    try (runInBase (restore ma))
+  case a of
+    Left e -> mb *> liftBase (throwIO (e :: SomeException))
+    Right s -> restoreM s <* mb
+```
+
+不过这倒带来了一点关于MonadBaseControl的思考，很多时候能不能提升出一个保持状态连续性的操作不是完全由原操作的类型决定的，重要的是基底monad有没有足够合适的内置操作，一些看起来没法实现的函数可以通过合理地使用内置操作和一点技巧手工合成。
+
+> 不知道为此所花的时间是否值得......
+
+到这里我们已经见过了`丢弃状态 | 随机选择状态 | 部分丢弃状态`的操作，还有些操作不会让状态真的消失，只是没法访问到，比如forkIO
+
+```haskell
+forkIO :: IO () -> IO ThreadId
+```
+
+好吧，它是完全的单态函数，但是此处我们要注意一个事，对它而言丢弃状态是完全合理的，毕竟它只是执行副作用的一个操作，并不执行什么逻辑上的计算.至于类型转换这倒非常简单，有个辅助函数`void :: IO a -> IO ()`。
+
+```haskell
+forkIO' :: MonadBaseControl IO m => m () -> m ThreadId
+forkIO' m = liftBaseWith $ \runInBase -> forkIO (void $ runInBase m)
+```
+
+它是另一个关于保持状态连续性语义的好例子，正确的类型很重要，正确的语义也很重要。forkIO是用于并发运算的，状态在此处缢裂为二，好好想想自己要的是不是这个比给monadT stack做类型配平更重要。
+
+## 还有更多
+
+很多人想了解MonadBaseControl的原因是Yesod好像鼓励使用它，monad-control这个包虽然小，但是看起来确实在haskell的生态系统里面有一定地位。
+
+如果真的决定在自己的项目里引入monad-control包，那最好再看看lifted-base和lifted-async，故名思意，它们是base和async包的提升版本，这样省得自己干苦力活了。不过，它们又带来一个额外的负担，在有可能涉及状态丢失的地方都得仔细读一遍文档。
+
+
+> Demystifying MonadBaseControl这篇博客最后提到FP Complete的unliftio库，但是评价偏不赞同，顺便这博客前面是用一个抽象逐步演进的过程来讲解MonadBaseControl如何从无到有的，有兴趣可以看看。
+
+## 笔者的想法
+
+怪话时间到。
+
+Simon Peyton Jone发过一篇论文**Tackling the awkward squard : monadic input/output, concurrency, exceptions, and foreign-language calls in haskell**, 这位我素未谋面(网上也没见过)的前辈所作的工作不可谓不精彩，但是事实证明，复杂度就是不会消失......IO，并发，异常及其他恐怖大概还会闹出很多鬼故事来，我很疑心究竟有没有解决这一切的技术手段......无论如何，我要记得握紧勇敢，不忘谦卑，看起来这就是目前我能做的最好的备战方式了。
+
+祝大家新年bug free！
