@@ -350,3 +350,7 @@ forkIO' m = liftBaseWith $ \runInBase -> forkIO (void $ runInBase m)
 Simon Peyton Jone发过一篇论文**Tackling the awkward squard : monadic input/output, concurrency, exceptions, and foreign-language calls in haskell**, 这位我素未谋面(网上也没见过)的前辈所作的工作不可谓不精彩，但是事实证明，复杂度就是不会消失......IO，并发，异常及其他恐怖大概还会闹出很多鬼故事来，我很疑心究竟有没有解决这一切的技术手段......无论如何，我要记得握紧勇敢，不忘谦卑，看起来这就是目前我能做的最好的备战方式了。
 
 祝大家新年bug free！
+
+## 增补
+
+https://hackage.haskell.org/package/resource-pool-0.2.3.2/docs/Data-Pool.html
