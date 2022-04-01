@@ -220,3 +220,4 @@ instance FTraversable FormTemplate where
             (getCompose $ eta cardExpiry)
 ```
 
+原文后半部分还有foldMap，zipWith，Lense和可组合验证的提升版本，有空补上。这个ftraverse属实是一时给我搞不会了。

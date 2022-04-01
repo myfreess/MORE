@@ -4,8 +4,6 @@ https://aphyr.com/posts/341-hexing-the-technical-interview
 
 主要内容包括
 
-+ Class Loader
-
 + Class文件结构
 
 + 链表环路检测
@@ -94,7 +92,7 @@ boolean Code(Iterable foo) { ... }
 >
 >“If it were meant to be illegal,” you remind him sagely, “Sun Microsystems would have made it unrepresentable.”
 
-这里主角为了节省栈空间直接把一个本地变量放到原先参数的位置上了，这大概也是选择字节码版本49放弃类型检查的原因之一，这个本地变量是一个Iterator而非一个Iterable的集合，类型上不一样。
+这里主角为了节省栈空间直接把一个本地变量放到原先参数的位置上了(我要把精力放到微操上面！)，这大概也是选择字节码版本49放弃类型检查的原因之一，这个本地变量是一个Iterator而非一个Iterable的集合，类型上不一样。
 
 为了确保没在纯胡扯翻阅了一下JVM规范的4.7.4，类型信息那里确实有记录具体是哪个类来着。
 
@@ -110,4 +108,14 @@ boolean Code(Iterable foo) { ... }
 https://stackoverflow.com/questions/2663115/how-to-detect-a-loop-in-a-linked-list
 
 
+8.
+顺带一说，终于解除了心里的一个疑惑。
+
+一直以来都知道java的泛型用了擦除实现，但是假如我用了一个没源码的第三方库涉及泛型，javac怎么给我做类型检查？
+
+最后的答案也挺合理，Code这个Attribute里面擦了泛型类型信息，不代表其他Atrribute不能保留啊。
+
+目前负责储存与泛型有关类型签名信息的是`Signature`,表示法上还是字符串加一个奇怪的语法，没有结构化。在只有class文件可用的时候，编译时就从这里面提取类型信息，顺便它也在运行时被反射和debugging机制使用。
+
+不过，这玩意不属于JVM的类型系统，运行时应该是不会检查的罢。
 

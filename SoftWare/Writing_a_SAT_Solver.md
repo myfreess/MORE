@@ -23,10 +23,8 @@ https://cse442-17f.github.io/Conflict-Driven-Clause-Learning/
 
 http://minisat.se/MiniSat.html
 
-我试图用clojure写一遍(当然是直接写DPLL)，一遍练习不太熟悉的clojure，一边了解SAT solver相关的基本知识，不过考虑到是clojure，大概会慢到离谱吧。
+我原本试图用clojure写一遍(当然是直接写DPLL)，一遍练习不太熟悉的clojure，一边了解SAT solver相关的基本知识，不过考虑到是clojure，大概会慢到离谱吧。
 
-一动手发现摆在我面前的问题还不少。
-
-## 抽象语法树和动态类型
+一动手发现摆在我面前的问题还不少。首先第一个头大之处：没有标准库&语法支持的模式匹配。我尝试了一些模拟策略
 
 ## 穷人的Alternative
