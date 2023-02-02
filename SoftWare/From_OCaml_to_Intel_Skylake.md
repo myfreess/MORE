@@ -1,0 +1,1 @@
+概述：2016年4月OCaml-4.03.0发布之际，一名*严肃的工业界OCaml用户*(Serious Industrial OCaml User)找到Xavier Leroy,报告了他们的应用在Intel Skylake处理器与OCaml-4.03.0环境下的奇怪崩溃。Xavier在经过一番试验后发现关闭hyperthread可解决此奇怪问题。最终，该问题被确认为cpu的硬件bug。
