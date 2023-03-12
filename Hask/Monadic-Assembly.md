@@ -75,9 +75,9 @@ type X86 a = StateT JITMem (Except String) a
 
 + “源码”(在这里是直接记录上面的指令集类型了，毕竟EDSL也没有parse步骤)
 + 对应的机器码
-+ 指令计数，不过这个虽然在代码里有，Stephen Diehl却没使用。
++ 指令计数
 + 指令在内存中的起始地址，这个是逻辑上不应该改变的常量。
-+ 当前指令的内存偏移量，用于扮演label。
++ 当前指令的内存偏移量
   
 > 比较生草的是Stephen的初始化函数里面已经把偏移量的初值设成起始地址了，但是后面的代码里他还总是`gets _memptr`，然后拿出来又不用......
 
@@ -91,7 +91,7 @@ data JITMem = JITMem
  } deriving (Eq, Show)
 ```
 
-有些人已经可以想象到做法了，但是我还是去抄了下作业才明白：这是个简单的jit，通过State Monad编写汇编生成器，给定一个初始地址之后生成机器码，然后放进内存(利用GHC的FFI)执行。
+有些人已经可以想象到做法了，但是我还是去抄了下作业才明白：这是个简单的jit，通过State Monad编写机器指令生成器，给定一个初始地址之后生成机器码，然后放进内存(利用GHC的FFI)执行。
 
 框架已经明晰，但是痛苦的体力活和一些细节逃不开。
 
@@ -123,7 +123,7 @@ QuadWord       | 00 | 00 | 00 | 00 | 00 | 00 | 00 | 00 |
 0xC0FFEE | EE | FF | C0 | 00 |
 ```
 
-指针只是个地址空间中的地址 -- 用一个整型表示，原文作者Stephen表示他用Linux，示例代码只考虑Linux x86-64环境,但是把mmap和mprotect的FFI调用换一换也能拿到别的平台跑。
+汇编语言中的指针只是个地址空间中的地址 -- 用一个整型表示，原文作者Stephen表示他用Linux，示例代码只考虑Linux x86-64环境,但是把mmap和mprotect的FFI调用换一换也能拿到别的平台跑。
 
 > 在与C库交互时作者使用了在Unix平台上通行的System V调用约定，所以Windows版大概要费些功夫。
 
@@ -184,5 +184,303 @@ index x = case x of
 -- 偏函数注意
 ```
 
-其实x86还允许把这些64位寄存器当成更小的寄存器使用(名称上大概就是从rax到eax再到ax), 不过还是让我们不去管这些个繁文缛节吧。
+其实x86还允许把这些64位寄存器当成更小的寄存器使用(名称上大概就是从rax到eax再到ax), 不过还是让我们暂时不去管这些个繁文缛节，先看看x86的指令操作数(operands)与操作码(opcode)吧。
 
+## Instructions
+
+首先给出一个指令的ADT表示
+
+```haskell
+data Instr
+  = Ret
+  | Mov Val Val
+  | Add Val Val
+  | Sub Val Val
+  | Mul Val
+  | IMul Val Val
+  | Xor Val Val
+  | Inc Val
+  | Dec Val
+  | Push Val
+  | Pop Val
+  | Call Val
+  | Loop Val
+  | Nop
+  | Syscall
+  deriving (Eq, Show)
+```
+
+将一个指令追加到JIT Memory中，可以看作将指令对应的字节串追加到整个机器码程序尾部，为了让后面的程序可以使用label，还要更新一下偏移量，载入内存并执行是平台相关的内容，下面详述。
+
+```haskell
+emit :: [Word8] -> X86 ()
+emit i = modify $ \s -> s
+  { _mach   = _mach s ++ i
+  , _memoff = _memoff s + fromIntegral (length i)
+  }
+```
+
+### Opcodes & Operands
+
+应该不会太让人意外的是，汇编里的某个抽象指令(如mov)有可能对应多个操作码：
+
++ 将数据从一个寄存器移到另一个寄存器 - 0x89
++ 将立即数存至某个寄存器 - 0xC7
+
+当然了根据前文我们知道，x86-64有好几种大小的寄存器，那么怎么在指令中标注其所使用的寄存器/立即数/内存宽度呢？这项工作在x86-64上靠指令的前缀部分实现，但这要在后面介绍指令结构时才会详细叙述。
+
+为了让读者能读懂[intel官方的手册](https://www-ssl.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-instruction-set-reference-manual-325383.pdf), 必须介绍一下前缀+操作数这种记法。
+
+| 前缀 | 描述 |
+|:---|:---|
+| r<size> | 寄存器操作数 |
+| imm<size> | 立即数 |
+| m<size> | 内存操作数 |
+
+例子:
+
++ r64表示一个64位寄存器
++ imm8表示一个8位立即数
++ m32表示一块32位的内存
+
+如果存在好几种操作数都对应同一操作码，那么用斜线隔开(如`r8/r16/r32`).
+
+Stephen Diehl选择的指令集子集里面包含一字节和二字节大小的操作码
+
+```
+Instruction 	Opcode
+CALL 	    E8
+RET 	    C3
+NOP 	    0D
+MOV 	    89
+PUSH 	    50
+POP 	    58
+LOOP 	    E2
+ADD 	    83
+SUB 	    29
+MUL 	    F7
+DIV 	    F7
+INC 	    FF
+DEC 	    FF
+NEG 	    F7
+CMP 	    39
+AND 	    21
+OR 	        09
+XOR 	    31
+NOT 	    F7
+ADC 	    11
+IDIV 	    F7
+IMUL 	    F7
+XCHG 	    87
+BSWAP       C8
+SHR 	    C1
+SHL 	    C1
+ROR 	    C0
+RCR 	    C0
+BT 	        BA
+BTS 	    BA
+BTR 	    B3
+JMP 	    EB
+JE 	        84
+JNE 	    85
+SYSCALL 	05
+```
+
+### Machine Code
+
+x86-64的指令结构复杂，历史遗留繁冗，以至于有人出了一篇论文*Enumerating x86-64 - It's Not as Easy as Counting*, 如果这还可以看作论文作者的一家之言，再看看325383这本手册的厚度吧，2198页，已经超过很多高级语言的Spec厚度了。
+
+![mcode](mcode.png)
+
+各部分的具体大小取决于操作码
+
+| Prefix | Opcode | Mod R/M | Scale Index Base | Displacement | Immediate
+| :---: | :---: | :---: | :---: | :---: | :---: |
+| 1-4 bytes | 1-3 bytes | 1 Byte | 1 Byte | 1-4 Bytes | 1-4 Bytes |
+
+以下的结构将只适用于上面所提到的子集。
+
+#### Prefix
+
+![prefix](prefix.png)
+
+前四位固定常数 0b0100, 后四位控制扩展开关。W修改操作宽度，R X B扩展寄存器编码方式
+
+
++ REX.W – Extends the operation width
++ REX.R – Extends ModRM.reg
++ REX.X – Extends SIB.index
++ REX.B – Extends SIB.base or ModRM.r/m
+
+
+#### ModR/M byte/寻址模式字节
+
+![ModRM](ModRM.png)
+
+指令的这一部分既负责配置操作数，又要标记寻址模式。细节太多，不一一列举。
+
+#### Scale Index Base
+
+![Scale](Scale.png)
+
+操作数地址通过**base + scale * index**获取
+
+## 预定义的一些"指令"
+
+总不能全部手动拼字节串吧，比拼字符串还邪恶
+
+```haskell
+
+ret :: X86 ()
+ret = do
+  emit [0xc3]
+
+-- add <r64> <imm32>
+-- 0:  48 83 c0 01             add    rax,0x1
+add (R l) (I r) = do
+  emit [0x48]              -- REX.W prefix
+  emit [0x05]              -- ADD
+  imm r
+-- add <r64> <r64>
+-- 0:  48 01 e0                add    rax,rsp
+add (R l) (R r) = do
+  emit [0x48]              -- REX prefix
+  emit [0x01]              -- ADD
+  emit [0xc0 .|. opcode r `shiftL` 3 .|. opcode l]
+```
+
+脏活干完了最后就可以写这样的程序
+
+```haskell
+arith :: X86 ()
+arith = do
+  mov rax (I 18)
+  add rax (I 4)
+  sub rax (I 2)
+  imul rax (I 2)
+  ret
+```
+
+## 代码载入
+
+生成二进制代码后，还需要有办法将其放进内存。Stephen Diehl选择用linux下的mmap系统调用，它需要一些特定的常量作为参数来控制所申请的内存需要哪些性质。
+
+首先看一眼GLibc的源码: https://sourceware.org/git/?p=glibc.git;a=blob;f=bits/mman.h;h=1d9f6f8d9caba842983f98ff2f2dd5a776df054c;hb=HEAD#l32
+
+```c
+#define PROT_NONE       0x00    /* 不可访问  */
+#define PROT_READ       0x04    /* 可读 */
+#define PROT_WRITE      0x02    /* 可写 */
+#define PROT_EXEC       0x01    /* 可执行 */
+
+#define MAP_FILE        0x0001  /* mapped from a file or device */
+#define MAP_ANON        0x0002  /* 作者写的注释是: 从内存或交换空间中分配, glibc代码里面的注释则是: 从匿名虚拟内存中分配 */
+#define MAP_TYPE        0x000f  /* mask for type field */
+```
+
+> 一开始有点疑惑MAP_ANON在代码里的值是0x20, 看了下作者放在github的代码库也是,,, 而且mapPrivate在mman.h里面是0x0000，后来找了份[比较新的源码](https://codebrowser.dev/glibc/glibc/sysdeps/unix/sysv/linux/bits/mman-linux.h.html)看，代码里的没错，想来这玩意具体常数大概会进行更换。解析头文件的工程量太大了，不太现实，连swift都调用clang来解决这个问题。这是真的，C Isn't A Programming Language Anymore这篇博客的作者在推特上抱怨关于abi的一些问题，Doug Gregor当即在回复中和盘托出: "All of this is the reason that Swift uses Clang internally to handle the (C)++ ABI. That way, we’re not chasing every new ABI-impacting attribute Clang adds"
+>
+> 如果你和我一样不知道为什么parse下头文件还跟C ABI能扯上关系，请看: https://faultlore.com/blah/c-isnt-a-language/
+
+```haskell
+newtype MmapOption = MmapOption CInt
+  deriving (Eq, Show, Ord, Num, Bits)
+
+protExec    = ProtOption 0x01
+protWrite   = ProtOption 0x02
+mmapAnon    = MmapOption 0x20
+mmapPrivate = MmapOption 0x02
+
+mapAnon = 0x20
+mapPrivate = 0x02
+
+allocateMemory :: CSize -> IO (Ptr Word8)
+allocateMemory size = mmap nullPtr size pflags mflags (-1) 0
+  where
+    pflags = protRead <> protWrite
+    mflags = mapAnon .|. mapPrivate
+```
+
+把haskell的字符串传递给JIT发射的代码需要做做转换
+
+```haskell
+heapPtr :: Ptr a -> Word32
+heapPtr = fromIntegral . ptrToIntPtr
+
+asciz :: [Char] -> IO Word32
+asciz str = do
+  ptr <- newCString (str ++ ['\n']) -- 非常C语言的
+  return $ heapPtr ptr
+```
+
+由于现在C成为了某种与操作系统交互的事实标准，不可避免地需要借用一些C函数，这可以通过动态链接器做到。GHC的haskell运行时使用了glibc的stdio.h和math.h，这两个头文件中的符号都可以通过此方式找到对应运行时地址。
+
+```haskell
+extern :: String -> IO Word32
+extern name = do
+  dl <- dlopen "" [RTLD_LAZY, RTLD_GLOBAL]
+  fn <- dlsym dl name
+  return $ heapPtr $ castFunPtrToPtr fn
+```
+
+准备工作做好之后就可以进行代码加载和执行了
+
+```haskell
+jit :: Ptr Word8 -> [Word8] -> IO (IO Int)
+jit mem machCode = do
+  code <- codePtr machCode
+  withForeignPtr (vecPtr code) $ \ptr -> do
+    copyBytes mem ptr (8*6)
+  return (getFunction mem)
+
+foreign import ccall "dynamic"
+  mkFun :: FunPtr (IO Int) -> IO Int
+
+getFunction :: Ptr Word8 -> IO Int
+getFunction mem = do
+  let fptr = unsafeCoerce mem :: FunPtr (IO Int)
+  mkFun fptr
+```
+
+略去一些实现细节，最后可以写这样的程序:
+
+```haskell
+main :: IO ()
+main = do
+  mem <- allocateMemory jitsize                -- create jit memory
+  let Right st = assemble mem arith            -- assemble symbolic program
+  fn  <- jit mem (_mach st)                    -- jit compile
+  res <- fn                                    -- call function
+  putStrLn $ "Result: " <> show res
+```
+
+## 跳转和循环
+
+跳转很简单，haskell对state monad提供了gets函数获取状态中某一部分需要的信息
+
+```haskell
+label :: X86 Val
+label = do
+  addr <- gets _memoff
+  ptr  <- gets _memptr
+  return (A addr)
+```
+
+loop指令的操作数是循环体起止代码地址的差值
+
+```haskell
+loop :: Val -> X86()
+loop (A dst) = do
+  emit [0xE2]
+  src <- gets _memoff
+  ptr <- gets _memptr
+  emit [fromIntegral $ dst - src]
+```
+
+## 调用约定
+
+要调C库的函数，不得不遵守调用约定，Linux-x64的调用约定用System-V即可。
+
+## 尾声
+
+我有点理解为什么qemu要用gcc炒回锅肉了。

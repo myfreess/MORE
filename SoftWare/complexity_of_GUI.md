@@ -64,7 +64,7 @@ this.lightTurnedOn.addListener((oldState, lightTurnedOn) -> {
 
 + **对于3**
 
-它让debug变难了，事件又不会自带stacktrace，在一个大型系统里，想搞清楚某条消息的来源还真不好办。组件多了还会有性能问题。这时候又会有用户定义的频道(Channel)来救场。
+它让debug变难了，事件又不会自带stacktrace，在一个大型系统里，想搞清楚某条消息的来源还真不好办。组件多了还会有性能问题。这时候又会有用户定义的频道(Channel)来救场(例如javascript的event emiter，此设计的关键是让组件可以"订阅"特定主题的事件，GUI框架里面通常会给这种机制起名叫event bus)。
 
 # ImGUI
 

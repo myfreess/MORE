@@ -4,6 +4,11 @@
 
 大概我是所谓的指责型人格，现在我只想指责C语言。虽然如此，有很多人为保护C程序员的现代生活(?)做出了艰苦卓绝的努力。我只做个搬运工，把一些经过选择的既成事实放在这里。现在网上很流行所谓的3分钟看电影，我是个连基础剪辑都不会的愚钝网上流民，但是我也想跟跟风，把我看到的关于C语言的一些博客文章，论文收集起来，做一个速读合订本。
 
+此处送上我在知乎评论区看到的一段对话
+
+> A: 解释对了，然后初学者觉得麻烦，不想学了？语言从来不是本质，谭书看看入个门就挺好。
+> B: 解释对了就让人觉得麻烦的语言，本来就不适合用来入门。
+
 ## Fun with NULL Pointer 
 
 **原文：http://lwn.net/Articles/342330/**
@@ -88,15 +93,8 @@ Using static_assert would require assuming you already have a C11 compiler, and 
 
 ```
 “But C Is ABI-Stable?!”
-Not necessarily. C is a simple language, and it both sells itself on and prides
-itself as such. So much so, that it’s even part of the [language’s rolling charter](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n2021.htm).
-There’s barely any name mangling because there’s no overloading. If you want
-“virtual functions” you need to hand-craft your virtual table structure and
-initialize it yourself. There’s barely any lookup or entity negotiation: what you
-write – [however scary or cursed](https://twitter.com/thingskatedid/status/1328918322507706368) – is what you get, in a general sense. (No, it’s
-not “portable assembly”. Compilers tear C code apart and make it far more
-efficient than the code people stuff into it. It’s not even a direct model of the
-machine anymore: just an abstract one.)
+Not necessarily. C is a simple language, and it both sells itself on and prides itself as such. So much so, that it’s even part of the [language’s rolling charter](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n2021.htm).
+There’s barely any name mangling because there’s no overloading. If you want “virtual functions” you need to hand-craft your virtual table structure and initialize it yourself. There’s barely any lookup or entity negotiation: what you write – [however scary or cursed](https://twitter.com/thingskatedid/status/1328918322507706368) – is what you get, in a general sense. (No, it’s not “portable assembly”. Compilers tear C code apart and make it far more efficient than the code people stuff into it. It’s not even a direct model of the machine anymore: just an abstract one.)
 ```
 
 虽然如此，还是有一些聊胜于无的补救措施的。
@@ -204,7 +202,7 @@ C语言被误解了，它实际上是编程世界中的*lingua franca*(通用语
 
 > ISO delegates to the compiler a great deal of the control **that K&R C divides between the programmer, the environment, and the target architecture but not the compiler**
 >
-> (ISO C把许多K&R C里面由程序员、环境、机器架构控制的东西托付给了编译器)
+> (ISO C把许多K&R C里面由程序员、环境、目标架构控制的东西托付给了编译器)
 
 在抛出论点之后VY很快给出了一个实例
 
@@ -229,7 +227,7 @@ C语言被误解了，它实际上是编程世界中的*lingua franca*(通用语
 > "[…] many seemingly reasonable things in C actually have undefined behavior, and this is a common source of bugs in programs. Beyond that, any undefined behavior in C gives license to the implementation (the compiler and runtime) to produce code that formats your hard drive, does completely unexpected things, or worse"
 
 
-紧接着的下一步是向ISO C关于别名的语言设计开火，这作者还是选择先摘录一遍Linus和丹尼斯的批评：
+定性批判结束后，紧接着的下一步是向ISO C关于别名的语言设计开火，这作者还是选择先摘录一遍Linus和丹尼斯的批评：
 
 > Ritchie’s main objection was to a type attribute intended to limit aliasing (two or more active pointers/references addressing the same storage).
 > 
@@ -256,13 +254,9 @@ C语言被误解了，它实际上是编程世界中的*lingua franca*(通用语
 + **Pointers Are Complicated, or: What's in a Byte?**
 + **A Few Billon Lines of Code Later - Using Static Analysis to Find Bugs in the Real World**
 
-一致且连贯的C语言并不存在。
+> 一切的一切都导向这样一个结果：一致且连贯的C语言从来就没有存在过，将来也不会存在。
 
-所谓的事实标准(de facto Standard)，
-
-2013年，这篇文章的创作团队向一些C语言方面的专业人士(委员会成员，C分析工具开发者，C形式语义专家，编译器作者，系统程序员)提出了42个关于C语言标准的问题。第二次调查于2015年展开(通过技术邮件组和博客)，得到了323条回复。
-
-
+2013年，这篇文章的创作团队向一些C语言方面的专业人士(委员会成员，C分析工具开发者，C形式语义专家，编译器作者，系统程序员)提出了42个关于C语言标准的问题。第二次调查于2015年展开(通过技术邮件组和博客)，得到了323条回复。他们从调查结果中得以一窥系统程序员所暗自期许的那个"C语言事实标准"(de facto Standard), 不幸地，和ISO标准不是同一个。
 
 ## GCC、strict aliasing与恐怖故事
 
