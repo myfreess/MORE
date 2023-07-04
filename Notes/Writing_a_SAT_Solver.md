@@ -44,7 +44,7 @@ http://minisat.se/MiniSat.html
 
 ## 小插曲：穷人的Alternative
 
-我原本试图用clojure写一遍(当然是直接写DPLL)，一遍练习不太熟悉的clojure，一边了解SAT solver相关的基本知识，一动手发现摆在我面前的问题还不少。首先第一个头大之处：没有标准库&语法支持的模式匹配。Clojure中和模式匹配有点像的一个特性是Destructring, 它在这个问题上可以使用，但是不太够。
+我原本试图用clojure写一遍，一遍练习不太熟悉的clojure，一边了解SAT solver相关的基本知识，一动手发现摆在我面前的问题还不少。首先第一个头大之处：没有标准库&语法支持的模式匹配。Clojure中和模式匹配有点像的一个特性是Destructring, 它在这个问题上可以使用，但是不太够。
 
 作为一个曾经花过不少时间学Scheme的人，我首先想到能不能用false表示失败，然后用or串联一系列的函数。不过我很快想起来，我要处理的数据是布尔表达式，所以最后选择用nil来表达失败。
 
@@ -80,5 +80,3 @@ http://minisat.se/MiniSat.html
      ;; 递归
      (ast/bexpr-map          k e))))
 ```
-
-还是回到Haskell吧。

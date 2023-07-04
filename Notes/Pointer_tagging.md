@@ -1,4 +1,4 @@
-> Pointer tagging for x86 systems
+> 原文：Pointer tagging for x86 systems
 > 作者：Jonathan Corbet
 
 64位系统已经成为现代PC的标配，然而，其系统中的指针宽度却通常达不到64bit这么宽。
