@@ -8,7 +8,7 @@
 
 > 粗略一点讲，NP问题是这样的一类问题：如果给出答案，可以在多项式时间复杂度内验证答案对不对，但是不一定能在多项式时间内完成求解。而NP完全问题是NP问题的一个拥有更强性质的子集：如果找到某个NP完全问题的多项式解法，那么所有NP问题都可以在多项式时间内完成求解。
 
-3. 尽管如此，还是能够从工程角度给出一些启发式的求解算法，Andrew选择了其中著名而经典的一种：DPLL算法。该算法基于布尔表达式的一种特殊形式：合取范式(Conjunctive Normal Form, CNF)
+3. 尽管如此，还是能够从工程角度给出一些启发式的求解算法，其中著名而经典的一种是DPLL算法。该算法基于布尔表达式的一种特殊形式：合取范式(Conjunctive Normal Form, CNF)
 4. 最后总结一些在DPLL上的微操，还有基于DPLL和子句学习(clause learning)的冲突驱动子句学习(Conflict Driven Clause Learning, CDCL)算法.
 
 主要参考资料：https://andrew.gibiansky.com/blog/verification/writing-a-sat-solver/
@@ -25,6 +25,7 @@ https://cse442-17f.github.io/Conflict-Driven-Clause-Learning/
 
 http://minisat.se/MiniSat.html
 
+另外这个也不错: https://codingnest.com/modern-sat-solvers-fast-neat-and-underused-part-3-of-n/
 
 ## 例子：购物问题
 
@@ -38,41 +39,3 @@ http://minisat.se/MiniSat.html
 
 ### CDCL
 
-## 小插曲：穷人的Alternative
-
-我原本试图用clojure写一遍，一遍练习不太熟悉的clojure，一边了解SAT solver相关的基本知识，一动手发现摆在我面前的问题还不少。首先第一个头大之处：没有标准库&语法支持的模式匹配。Clojure中和模式匹配有点像的一个特性是Destructring, 它在这个问题上可以使用，但是不太够。
-
-作为一个曾经花过不少时间学Scheme的人，我首先想到能不能用false表示失败，然后用or串联一系列的函数。不过我很快想起来，我要处理的数据是布尔表达式，所以最后选择用nil来表达失败。
-
-```clojure
-(defn partial-foldr
-  "foldr for non-empty list"
-  [f l]
-  (if (empty? (rest l))
-    (first l)
-    (f (first l) (partial-foldr f (rest l)))))
-
-(defmacro choose
-  "choose the first non-nil value"
-  [& branchs]
-  (partial-foldr
-   (fn [curr next]
-     (let [tmp (gensym)]
-       `(let [~tmp ~curr]
-          (if (nil? ~tmp) ~next ~tmp)))) branchs))
-
-(defn fix-negations
-  "removing negations"
-  [e]
-  (let [k fix-negations]
-    (choose
-     ;; 去除双重否定
-     (remove-double-negation k e)
-     ;; 德摩根
-     (n-distribute-over-and  k e)
-     (n-distribute-over-or   k e)
-     ;; 处理常量
-     (put-not-into-const     k e)
-     ;; 递归
-     (ast/bexpr-map          k e))))
-```
