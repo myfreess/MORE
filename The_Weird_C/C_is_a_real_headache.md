@@ -12,9 +12,9 @@ C语言有害健康。
 C语言之父丹尼斯里奇对ISO C前身ANSI C草案的批评：
 
 > Dennis Ritchie. 1988. noalias comments to X3J11. (March 1988). https://groups.google.com/g/comp.lang.c/c/K0Cz2s9il3E/m/YDyo_xaRG5kJ
->
+> 
 > "The fundamental problem is that it is not possible to write real programs using the X3J11 definition of C. The committee has created an unreal language that no one can or will actually use."
->
+> 
 > "the committee is planting timebombs that are sure to explode in people’s faces. Assigning an ordinary pointer to a pointer to a ‘noalias’ object is a license for the compiler to undertake aggressive optimizations that are completely legal by the committee’s rules, but make hash of apparently safe programs."
 
 Clang编译器主开发者之一Chris Lattner在博客中对未定义行为的意见：
@@ -26,8 +26,10 @@ Clang编译器主开发者之一Chris Lattner在博客中对未定义行为的�
 Linus
 
 > "The idiotic C alias rules aren’t even worth discussing. They were a mistake. The kernel doesn’t use some “C dialect pretty far from standard C”. Yeah, let’s just say that the original C designers were better at their job than a gaggle of standards people who were making bad crap up to make some Fortran-style programs go faster. They don’t speed up normal code either,they just introduce undefined behavior in a lot of code. And deleting NULL pointer checks because somebody made a mistake, and then turning that small mistake into a real and exploitable security hole? Not so smart either. "
->
+> 
 > 链接：https://lkml.org/lkml/2018/6/5/769)
+
+# 
 
 ## 论文、博客以及一些网络讨论
 
@@ -149,20 +151,22 @@ C语言被误解了，它实际上是编程世界中的*lingua franca*(通用语
 > "Systems or library C codes often cannot be written in standard-conformant C" [20].
 > 
 > and by practitioners e.g. [38] The primary cause is a design approach in the ISO standard that has given priority to certain kinds of optimization over both correctness and the "high-level assembler" [9] intentions of C, even while the latter remain enshrined in the rationale.
->
+> 
 > (完全遵守ISO C标准没法写系统/库代码，主要原因是制定标准时过分看重优化而不太在意语义正确性和C作为高级汇编的设计意图。)
 
 顺带一提这作者似乎偏好K&R C
 
 > ISO delegates to the compiler a great deal of the control **that K&R C divides between the programmer, the environment, and the target architecture but not the compiler**
->
+> 
 > (ISO C把许多K&R C里面由程序员、环境、目标架构控制的东西托付给了编译器)
 
 在抛出论点之后作者很快给出了一个实例
 
 > For an example of an implementation of malloc in K&R(page 187) the text explains there is a question about whether "pointers to different blocks ... can be meaningfully compared", something not guaranteed by the standard. The conclusion is "this version of malloc is portable only among machines for which general pointer comparison is meaningful." – delegating the semantics to the processor architecture.
->
+> 
 > (K&R C的malloc语义在符合要求的架构上一致可移植)
+
+啥也别说了，打倒C语言委员会修正主义司令部！
 
 ### Into the Depths of C: Elaborating the De Facto Standards
 
@@ -190,13 +194,13 @@ TUN是支持`poll()`的，在2.6.30它的开头大概看起来像这样：
 ```c
 static unsigned int tun_chr_poll(struct file *file, poll_table * wait)
     {
-	struct tun_file *tfile = file->private_data;
-	struct tun_struct *tun = __tun_get(tfile);
-	struct sock *sk = tun->sk; //这一行是 Herbert的补丁
-	unsigned int mask = 0;
+    struct tun_file *tfile = file->private_data;
+    struct tun_struct *tun = __tun_get(tfile);
+    struct sock *sk = tun->sk; //这一行是 Herbert的补丁
+    unsigned int mask = 0;
 
-	if (!tun)
-	    return POLLERR;
+    if (!tun)
+        return POLLERR;
 ```
 
 补丁的问题是在检查tun是否非空之前便解引用了它。GCC对这段代码大胆地做出了以下推断
@@ -205,16 +209,20 @@ static unsigned int tun_chr_poll(struct file *file, poll_table * wait)
 + 用户不会编写解引用空指针的代码
 + 那tun一定是非空的，则下面的检查是不必要的。
 
-> 此处GCC的推断依据便是所谓的未定义行为(undefined behavior，简称UB),更多批评详见后文
+> 此处GCC的推断依据便是所谓的未定义行为(undefined behavior，简称UB)
 
 于是GCC把
+
 ```c
-	if (!tun)
-	    return POLLERR;
+    if (!tun)
+        return POLLERR;
 ```
+
 优化掉了。
 
 而由于某些巧合，那时的安全机制允许用户空间的程序将地址空间的第零页映射到某块可以访问的内存上，为后续利用打开了一扇窗口。
+
+这个bug在前文引用的Linus发言中被特别关照过(链接是`https://lkml.org/lkml/2018/6/5/769`)
 
 ### 一段twitter上关于构建脚本滥用未定义行为的讨论
 

@@ -40,4 +40,3 @@ Cortex-M processors provide a unit dedicated to exceptions management. This is c
 # 8. Universal Asynchronous Serial Communications
 
 Nowadays there is a really high number of serial communication protocols and hardware interfaces available in the electronics industry. The most of them are focused on high transmission bandwidths, like the more recent USB 2.0 and 3.0 standards, the Firewire (IEEE 1394) and so on.
-
